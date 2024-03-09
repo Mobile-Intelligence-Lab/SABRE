@@ -1,0 +1,7 @@
+numpy
+torch
+torchvision
+matplotlib
+git+https://github.com/fbcotter/pytorch_wavelets
+git+https://github.com/BorealisAI/advertorch
+git+https://github.com/fra31/auto-attack

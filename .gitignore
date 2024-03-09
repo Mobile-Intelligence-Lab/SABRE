@@ -1,0 +1,6 @@
+__pycache__/
+.idea/
+.ipynb_checkpoints/
+.DS_Store
+*.py[cod]
+*$py.class
