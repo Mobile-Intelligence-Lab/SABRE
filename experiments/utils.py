@@ -242,7 +242,7 @@ def summarize_epoch(epoch, n_epochs, batch_count, running_losses, model, total, 
     printer(f"[Epoch {epoch + 1}/{n_epochs} completed] "
             f"Reconstruction/Classification Loss: {running_losses['reconstruction'] / batch_count:.3f}/"
             f"{running_losses['classification'] / batch_count:.3f} | Lambda_r: {lambda_r:.3f} | "
-            f"Accuracy: {100 * correct / total:.2f}% ({correct}/{total})\n", log_path)
+            f"Accuracy: {100 * correct / total:.2f}% ({correct}/{total})", log_path)
 
 
 def sabre_train(model, data_loader, n_epochs=100, learning_rate=1e-3, save_path=None, log_path=None, params={}):
@@ -296,16 +296,16 @@ def sabre_train(model, data_loader, n_epochs=100, learning_rate=1e-3, save_path=
             reconstructed = model.preprocessing(inputs)
             reconstruction_targets = torch.cat((original_inputs, original_inputs), dim=0).clone().detach()
             reconstruction_loss = 2. * torch.sqrt(reconstruction_criterion(reconstructed, reconstruction_targets))
+            reconstruction_loss.backward(retain_graph=True)
 
             features, outputs = model.features_logits(reconstructed)
             targets = torch.cat((labels, labels), dim=0).clone()
             classifier_loss = criterion(outputs, targets)
 
-            reconstruction_loss += torch.sqrt(reconstruction_criterion(features[-1][:batch_size],
-                                                                       features[-1][batch_size:]))
+            classifier_loss += torch.sqrt(reconstruction_criterion(features[-1][:batch_size],
+                                                                   features[-1][batch_size:]))
 
-            loss = reconstruction_loss + classifier_loss
-            loss.backward()
+            classifier_loss.backward()
             optimizer.step()
 
             # print statistics

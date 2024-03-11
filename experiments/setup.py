@@ -91,7 +91,7 @@ def perform_attacks(model_name, model, attacks, train_fn, train_data_loader, tes
             model_path = f"{models_dir}/model.weights.pth"
 
             if os.path.exists(model_path):
-                printer(f'+Loading pretrained model: {model_path}', traces_file)
+                printer(f'+Loading pretrained model...', traces_file)
             else:
                 printer(f'\n+Training model...', traces_file)
 

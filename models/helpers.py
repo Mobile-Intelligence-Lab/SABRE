@@ -68,4 +68,4 @@ def save_model(model, save_path, log_path=None):
     # Save the model's state dictionary.
     torch.save(model_to_save.state_dict(), save_path)
 
-    printer(f"Model saved successfully: {save_path}", log_path)
+    printer(f"Model saved successfully: {save_path}\n", log_path)

@@ -1,6 +1,7 @@
 import math
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 def reshape_inputs(x):
@@ -15,7 +16,7 @@ def reshape_inputs(x):
 
 
 class DenoisingCNN(nn.Module):
-    def __init__(self, in_features=1, out_features=1, num_layers=17, num_features=64):
+    def __init__(self, in_features=1, out_features=1, num_layers=17, num_features=64, upsample_count=1):
         super(DenoisingCNN, self).__init__()
         self.out_features = out_features
         layers = [nn.Sequential(nn.Conv2d(in_features, num_features, kernel_size=3, stride=1, padding=1),
@@ -29,6 +30,7 @@ class DenoisingCNN(nn.Module):
         self.layers = nn.Sequential(*layers)
         self.pool = nn.AvgPool2d(2, 2)
 
+        self.upsample_count = upsample_count
         self._initialize_weights()
 
     def call_layers(self, x):
@@ -46,6 +48,11 @@ class DenoisingCNN(nn.Module):
         b, _, m, n = inputs.shape
         c = self.out_features
         inputs = reshape_inputs(inputs)
+
+        for _ in range(self.upsample_count):
+            inputs = self.pool(inputs)
+            inputs = F.interpolate(inputs, scale_factor=2, mode='nearest')
+
         outputs = self.layers(inputs)
         if math.sqrt(m * n) > int(math.sqrt(m * n)):
             outputs = outputs.reshape(b, c, -1)[:, :, :m * n].reshape(b, c, m, n)
