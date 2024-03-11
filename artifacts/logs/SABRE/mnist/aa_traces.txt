@@ -1,0 +1,171 @@
+Evaluating model... [Attack=AutoAttack, eps=80/255]
+
+setting parameters for rand version
+using rand version including apgd-ce, apgd-dlr
+initial accuracy: 99.33%
+apgd-ce - 1/39 - 0 out of 256 successfully perturbed
+apgd-ce - 2/39 - 1 out of 256 successfully perturbed
+apgd-ce - 3/39 - 1 out of 256 successfully perturbed
+apgd-ce - 4/39 - 1 out of 256 successfully perturbed
+apgd-ce - 5/39 - 1 out of 256 successfully perturbed
+apgd-ce - 6/39 - 2 out of 256 successfully perturbed
+apgd-ce - 7/39 - 1 out of 256 successfully perturbed
+apgd-ce - 8/39 - 1 out of 256 successfully perturbed
+apgd-ce - 9/39 - 1 out of 256 successfully perturbed
+apgd-ce - 10/39 - 2 out of 256 successfully perturbed
+apgd-ce - 11/39 - 1 out of 256 successfully perturbed
+apgd-ce - 12/39 - 1 out of 256 successfully perturbed
+apgd-ce - 13/39 - 1 out of 256 successfully perturbed
+apgd-ce - 14/39 - 0 out of 256 successfully perturbed
+apgd-ce - 15/39 - 2 out of 256 successfully perturbed
+apgd-ce - 16/39 - 1 out of 256 successfully perturbed
+apgd-ce - 17/39 - 2 out of 256 successfully perturbed
+apgd-ce - 18/39 - 2 out of 256 successfully perturbed
+apgd-ce - 19/39 - 1 out of 256 successfully perturbed
+apgd-ce - 20/39 - 1 out of 256 successfully perturbed
+apgd-ce - 21/39 - 0 out of 256 successfully perturbed
+apgd-ce - 22/39 - 1 out of 256 successfully perturbed
+apgd-ce - 23/39 - 0 out of 256 successfully perturbed
+apgd-ce - 24/39 - 2 out of 256 successfully perturbed
+apgd-ce - 25/39 - 0 out of 256 successfully perturbed
+apgd-ce - 26/39 - 2 out of 256 successfully perturbed
+apgd-ce - 27/39 - 0 out of 256 successfully perturbed
+apgd-ce - 28/39 - 0 out of 256 successfully perturbed
+apgd-ce - 29/39 - 1 out of 256 successfully perturbed
+apgd-ce - 30/39 - 0 out of 256 successfully perturbed
+apgd-ce - 31/39 - 1 out of 256 successfully perturbed
+apgd-ce - 32/39 - 1 out of 256 successfully perturbed
+apgd-ce - 33/39 - 0 out of 256 successfully perturbed
+apgd-ce - 34/39 - 0 out of 256 successfully perturbed
+apgd-ce - 35/39 - 3 out of 256 successfully perturbed
+apgd-ce - 36/39 - 0 out of 256 successfully perturbed
+apgd-ce - 37/39 - 0 out of 256 successfully perturbed
+apgd-ce - 38/39 - 3 out of 256 successfully perturbed
+apgd-ce - 39/39 - 1 out of 188 successfully perturbed
+robust accuracy after APGD-CE: 98.78% (total time 4895.7 s)
+apgd-dlr - 1/39 - 5 out of 256 successfully perturbed
+apgd-dlr - 2/39 - 6 out of 256 successfully perturbed
+apgd-dlr - 3/39 - 9 out of 256 successfully perturbed
+apgd-dlr - 4/39 - 4 out of 256 successfully perturbed
+apgd-dlr - 5/39 - 6 out of 256 successfully perturbed
+apgd-dlr - 6/39 - 8 out of 256 successfully perturbed
+apgd-dlr - 7/39 - 2 out of 256 successfully perturbed
+apgd-dlr - 8/39 - 8 out of 256 successfully perturbed
+apgd-dlr - 9/39 - 6 out of 256 successfully perturbed
+apgd-dlr - 10/39 - 7 out of 256 successfully perturbed
+apgd-dlr - 11/39 - 3 out of 256 successfully perturbed
+apgd-dlr - 12/39 - 6 out of 256 successfully perturbed
+apgd-dlr - 13/39 - 4 out of 256 successfully perturbed
+apgd-dlr - 14/39 - 6 out of 256 successfully perturbed
+apgd-dlr - 15/39 - 10 out of 256 successfully perturbed
+apgd-dlr - 16/39 - 7 out of 256 successfully perturbed
+apgd-dlr - 17/39 - 6 out of 256 successfully perturbed
+apgd-dlr - 18/39 - 7 out of 256 successfully perturbed
+apgd-dlr - 19/39 - 4 out of 256 successfully perturbed
+apgd-dlr - 20/39 - 2 out of 256 successfully perturbed
+apgd-dlr - 21/39 - 1 out of 256 successfully perturbed
+apgd-dlr - 22/39 - 1 out of 256 successfully perturbed
+apgd-dlr - 23/39 - 3 out of 256 successfully perturbed
+apgd-dlr - 24/39 - 3 out of 256 successfully perturbed
+apgd-dlr - 25/39 - 0 out of 256 successfully perturbed
+apgd-dlr - 26/39 - 9 out of 256 successfully perturbed
+apgd-dlr - 27/39 - 0 out of 256 successfully perturbed
+apgd-dlr - 28/39 - 0 out of 256 successfully perturbed
+apgd-dlr - 29/39 - 1 out of 256 successfully perturbed
+apgd-dlr - 30/39 - 0 out of 256 successfully perturbed
+apgd-dlr - 31/39 - 0 out of 256 successfully perturbed
+apgd-dlr - 32/39 - 1 out of 256 successfully perturbed
+apgd-dlr - 33/39 - 2 out of 256 successfully perturbed
+apgd-dlr - 34/39 - 0 out of 256 successfully perturbed
+apgd-dlr - 35/39 - 0 out of 256 successfully perturbed
+apgd-dlr - 36/39 - 2 out of 256 successfully perturbed
+apgd-dlr - 37/39 - 0 out of 256 successfully perturbed
+apgd-dlr - 38/39 - 3 out of 256 successfully perturbed
+apgd-dlr - 39/39 - 2 out of 150 successfully perturbed
+robust accuracy after APGD-DLR: 97.34% (total time 9786.8 s)
+max Linf perturbation: 0.31373, nan in tensor: 0, max: 1.00000, min: 0.00000
+robust accuracy: 97.34%
+
+Evaluating model... [Attack=AutoAttack, eps=150/255]
+
+setting parameters for rand version
+using rand version including apgd-ce, apgd-dlr
+initial accuracy: 99.67%
+apgd-ce - 1/39 - 28 out of 256 successfully perturbed
+apgd-ce - 2/39 - 35 out of 256 successfully perturbed
+apgd-ce - 3/39 - 32 out of 256 successfully perturbed
+apgd-ce - 4/39 - 39 out of 256 successfully perturbed
+apgd-ce - 5/39 - 37 out of 256 successfully perturbed
+apgd-ce - 6/39 - 42 out of 256 successfully perturbed
+apgd-ce - 7/39 - 40 out of 256 successfully perturbed
+apgd-ce - 8/39 - 32 out of 256 successfully perturbed
+apgd-ce - 9/39 - 30 out of 256 successfully perturbed
+apgd-ce - 10/39 - 34 out of 256 successfully perturbed
+apgd-ce - 11/39 - 43 out of 256 successfully perturbed
+apgd-ce - 12/39 - 41 out of 256 successfully perturbed
+apgd-ce - 13/39 - 37 out of 256 successfully perturbed
+apgd-ce - 14/39 - 26 out of 256 successfully perturbed
+apgd-ce - 15/39 - 32 out of 256 successfully perturbed
+apgd-ce - 16/39 - 27 out of 256 successfully perturbed
+apgd-ce - 17/39 - 26 out of 256 successfully perturbed
+apgd-ce - 18/39 - 39 out of 256 successfully perturbed
+apgd-ce - 19/39 - 31 out of 256 successfully perturbed
+apgd-ce - 20/39 - 20 out of 256 successfully perturbed
+apgd-ce - 21/39 - 16 out of 256 successfully perturbed
+apgd-ce - 22/39 - 28 out of 256 successfully perturbed
+apgd-ce - 23/39 - 18 out of 256 successfully perturbed
+apgd-ce - 24/39 - 19 out of 256 successfully perturbed
+apgd-ce - 25/39 - 14 out of 256 successfully perturbed
+apgd-ce - 26/39 - 40 out of 256 successfully perturbed
+apgd-ce - 27/39 - 19 out of 256 successfully perturbed
+apgd-ce - 28/39 - 16 out of 256 successfully perturbed
+apgd-ce - 29/39 - 27 out of 256 successfully perturbed
+apgd-ce - 30/39 - 31 out of 256 successfully perturbed
+apgd-ce - 31/39 - 16 out of 256 successfully perturbed
+apgd-ce - 32/39 - 17 out of 256 successfully perturbed
+apgd-ce - 33/39 - 18 out of 256 successfully perturbed
+apgd-ce - 34/39 - 12 out of 256 successfully perturbed
+apgd-ce - 35/39 - 15 out of 256 successfully perturbed
+apgd-ce - 36/39 - 18 out of 256 successfully perturbed
+apgd-ce - 37/39 - 12 out of 256 successfully perturbed
+apgd-ce - 38/39 - 39 out of 256 successfully perturbed
+apgd-ce - 39/39 - 33 out of 189 successfully perturbed
+robust accuracy after APGD-CE: 88.38% (total time 4732.0 s)
+apgd-dlr - 1/35 - 104 out of 256 successfully perturbed
+apgd-dlr - 2/35 - 114 out of 256 successfully perturbed
+apgd-dlr - 3/35 - 78 out of 256 successfully perturbed
+apgd-dlr - 4/35 - 112 out of 256 successfully perturbed
+apgd-dlr - 5/35 - 113 out of 256 successfully perturbed
+apgd-dlr - 6/35 - 101 out of 256 successfully perturbed
+apgd-dlr - 7/35 - 116 out of 256 successfully perturbed
+apgd-dlr - 8/35 - 121 out of 256 successfully perturbed
+apgd-dlr - 9/35 - 104 out of 256 successfully perturbed
+apgd-dlr - 10/35 - 93 out of 256 successfully perturbed
+apgd-dlr - 11/35 - 116 out of 256 successfully perturbed
+apgd-dlr - 12/35 - 113 out of 256 successfully perturbed
+apgd-dlr - 13/35 - 116 out of 256 successfully perturbed
+apgd-dlr - 14/35 - 105 out of 256 successfully perturbed
+apgd-dlr - 15/35 - 111 out of 256 successfully perturbed
+apgd-dlr - 16/35 - 94 out of 256 successfully perturbed
+apgd-dlr - 17/35 - 96 out of 256 successfully perturbed
+apgd-dlr - 18/35 - 90 out of 256 successfully perturbed
+apgd-dlr - 19/35 - 91 out of 256 successfully perturbed
+apgd-dlr - 20/35 - 89 out of 256 successfully perturbed
+apgd-dlr - 21/35 - 94 out of 256 successfully perturbed
+apgd-dlr - 22/35 - 58 out of 256 successfully perturbed
+apgd-dlr - 23/35 - 104 out of 256 successfully perturbed
+apgd-dlr - 24/35 - 74 out of 256 successfully perturbed
+apgd-dlr - 25/35 - 94 out of 256 successfully perturbed
+apgd-dlr - 26/35 - 107 out of 256 successfully perturbed
+apgd-dlr - 27/35 - 85 out of 256 successfully perturbed
+apgd-dlr - 28/35 - 81 out of 256 successfully perturbed
+apgd-dlr - 29/35 - 95 out of 256 successfully perturbed
+apgd-dlr - 30/35 - 70 out of 256 successfully perturbed
+apgd-dlr - 31/35 - 64 out of 256 successfully perturbed
+apgd-dlr - 32/35 - 73 out of 256 successfully perturbed
+apgd-dlr - 33/35 - 93 out of 256 successfully perturbed
+apgd-dlr - 34/35 - 121 out of 256 successfully perturbed
+apgd-dlr - 35/35 - 51 out of 134 successfully perturbed
+robust accuracy after APGD-DLR: 54.97% (total time 8963.5 s)
+max Linf perturbation: 0.58824, nan in tensor: 0, max: 1.00000, min: 0.00000
+robust accuracy: 54.97%

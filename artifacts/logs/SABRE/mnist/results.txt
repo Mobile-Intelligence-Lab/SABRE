@@ -1,0 +1,17 @@
+
+Evaluation results...
+====================================================================================================
+SABRE-__no_attack | Accuracy: 99.30% (9930/10000))
+SABRE-whitebox_fgsm | Accuracy: 99.76% (9976/10000))
+SABRE-whitebox_pgd_steps_7 | Accuracy: 99.88% (9988/10000))
+SABRE-whitebox_pgd_steps_20 | Accuracy: 99.86% (9986/10000))
+SABRE-whitebox_pgd_steps_100 | Accuracy: 99.88% (9988/10000))
+SABRE-whitebox_pgd_steps_1000 | Accuracy: 99.89% (9989/10000))
+SABRE-whitebox_eotpgd_steps_7_10 | Accuracy: 99.89% (9989/10000))
+SABRE-whitebox_eotpgd_steps_20_10 | Accuracy: 99.92% (9992/10000))
+SABRE-whitebox_eotpgd_steps_100_10 | Accuracy: 99.94% (9994/10000))
+SABRE-whitebox_eotpgd_steps_1000_10 | Accuracy: 99.91% (9991/10000))
+SABRE-whitebox_cwl2 | Accuracy: 99.29% (9929/10000))
+====================================================================================================
+
+
