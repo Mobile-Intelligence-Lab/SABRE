@@ -272,7 +272,7 @@ def sabre_train(model, data_loader, n_epochs=100, learning_rate=1e-3, save_path=
     if normalize:
         set_normalizers(model, data_loader, n_channels)
 
-    print_every = len(data_loader) // 10
+    print_every = max(1, len(data_loader) // 10)
 
     for epoch in range(n_epochs):
         model.train()
@@ -375,7 +375,7 @@ def evaluate(model, attack, data_loader, log_path=None):
         attack = lambda x, y: x
 
     correct, total = 0, 0
-    print_every = len(data_loader) // 10
+    print_every = max(1, len(data_loader) // 10)
 
     with torch.no_grad():
         for i, (inputs, labels) in enumerate(data_loader, 0):

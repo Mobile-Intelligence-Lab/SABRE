@@ -33,9 +33,6 @@ class DenoisingCNN(nn.Module):
         self.upsample_count = upsample_count
         self._initialize_weights()
 
-    def call_layers(self, x):
-        return None
-
     def _initialize_weights(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -54,7 +51,7 @@ class DenoisingCNN(nn.Module):
             inputs = F.interpolate(inputs, scale_factor=2, mode='nearest')
 
         outputs = self.layers(inputs)
+
         if math.sqrt(m * n) > int(math.sqrt(m * n)):
             outputs = outputs.reshape(b, c, -1)[:, :, :m * n].reshape(b, c, m, n)
-
         return outputs
