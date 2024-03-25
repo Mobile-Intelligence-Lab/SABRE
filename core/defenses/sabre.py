@@ -1,6 +1,8 @@
 import math
+import numpy as np
 import torch
 from torch import nn
+import torch.nn.functional as F
 from pytorch_wavelets import DWTForward, DWTInverse
 from advertorch.bpda import BPDAWrapper
 
@@ -17,7 +19,9 @@ class Sabre(nn.Module):
         self.mode = 'symmetric'  # Padding mode for DWT
         self.max_levels = 1  # Default max level for wavelet transforms
 
-        self.error_coefficient = self.annealing_coefficient = 1e-12  # Used to avoid multiplications and divisions by 0
+        self.annealing_coefficient = 1e-12
+        self.error_coefficient = 1e-3
+        self.use_bins = True
 
         # Placeholders for forward and inverse wavelet transform functions
         self.fwt = None
@@ -51,14 +55,20 @@ class Sabre(nn.Module):
         """Applies the transformation process including resizing, wavelet transforms, denoising, and normalization."""
         original_shape = x.shape[-2:]
         x = self.reshape_inputs(x)
+        x = self.precision_blend(x)
 
         if self.use_rand:
             x = self.apply_random_noise(x)
 
         y = self.apply_wavelet_processing(x, lambda_r)
         y = self.normalize_and_reshape_output(y, original_shape)
-
         return y
+
+    def precision_blend(self, x, detail_ratio=.1):
+        if self.use_bins and self.eps > 0:
+            precision = -int(math.floor(math.log10(abs(self.eps)))) - 1
+            x = detail_ratio * x + (1 - detail_ratio) * torch.round(x, decimals=precision)
+        return x
 
     def apply_random_noise(self, x):
         """Applies random noise to the input tensor."""
@@ -67,18 +77,19 @@ class Sabre(nn.Module):
 
         b, c, m, n = x.shape
         xs = x.clone().unsqueeze(2).tile(1, 1, self.n_variants, 1, 1)
-        noise = (2 * torch.rand_like(xs) - 1) * self.eps  # Generate noise in the range [-eps, eps]
+        noise = (2 * torch.rand_like(xs, device=x.device) - 1) * self.eps  # Generate noise in the range [-eps, eps]
         noise_coefficients = torch.arange(self.n_variants, device=x.device) / (self.n_variants - 1)
         noise_coefficients = noise_coefficients.unsqueeze(0).unsqueeze(1).unsqueeze(3).unsqueeze(4).tile(b, c, 1, m, n)
         noise = noise * noise_coefficients
-        xs_noisy = xs + noise.to(xs.device)  # Apply noise
-        xs_noisy = torch.clamp(xs_noisy, 0, 1)  # Clamp to ensure the tensor remains within valid input range
+        xs_noisy = xs + noise
+        xs_noisy = torch.clamp(xs_noisy, 0, 1)
 
         stds = xs_noisy.reshape(b, c, self.n_variants, -1).std(dim=3)
         best_variant = torch.argmin(stds, dim=2)
         batch_indices = torch.arange(b)[:, None].expand(-1, c).to(best_variant.device)
         channel_indices = torch.arange(c)[None, :].expand(b, -1).to(best_variant.device)
         x = xs_noisy[batch_indices, channel_indices, best_variant].reshape(b, c, m, n)
+
         return x
 
     def estimate_threshold(self, energies, lambda_r):
@@ -93,11 +104,10 @@ class Sabre(nn.Module):
         b, c, m, n = x.shape
 
         self.build_transforms(x)
-        self.fwt.to(x.device)
 
         # Apply forward wavelet transform
         x_approx, x_details = self.fwt(x)
-        bands = [x_approx.unsqueeze(2).to(x.device)] + [x_i.to(x.device) for x_i in x_details[::-1]]
+        bands = [x_approx.unsqueeze(2)] + x_details
 
         # Calculate and normalize energies
         energies = torch.cat([(band ** 2).sum(dim=(3, 4)) for band in bands], dim=2)
@@ -110,33 +120,29 @@ class Sabre(nn.Module):
 
         # Denoise spectral bands
         for i, band in enumerate(bands):
-            shape = band.shape
             clean_band = band.reshape(b, c, -1)
-            band_coefficients, _ = torch.sort(clean_band, descending=True)
-            selection_ratio = thresholds.unsqueeze(2).tile(1, 1, band_coefficients.shape[2])
-            selection_indices = torch.floor((selection_ratio * (band_coefficients.shape[2] - 1))).type(torch.int64)
-            band_thresholds = torch.gather(band_coefficients.to(x.device), dim=2, index=selection_indices.to(x.device))
-            noise_indices = (clean_band < band_thresholds).long()
-            clean_band[noise_indices] = clean_band[noise_indices] * self.annealing_coefficient
-            bands[i] = clean_band.reshape(shape)
+            coeffs = clean_band.abs().sort(dim=2, descending=True).values
+            selection_indices = (thresholds * (coeffs.shape[2] - 1)).floor().to(torch.int64).unsqueeze(-1)
+            band_thresholds = torch.gather(coeffs, 2, selection_indices).expand_as(clean_band)
+            clean_band[clean_band.abs() < band_thresholds] *= self.annealing_coefficient
+            bands[i] = clean_band.reshape(band.shape)
 
-        # Reconstruct input (and individual bands)
+        # Reconstruct input
         y_approx, *y_details = bands
         n_detail_bands = len(y_details)
-        y_details = [band.to(x.device) for band in y_details[::-1]]
-        y_approx = y_approx.reshape(y_approx.shape[0], y_approx.shape[1], y_approx.shape[3], y_approx.shape[4])
+        y_approx = y_approx.squeeze(dim=2)
         outputs = torch.zeros_like(x, device=x.device).unsqueeze(2).tile(1, 1, n_detail_bands * 3 + 1 + 1, 1, 1)
-        zeroed_y_approx = y_approx.clone().to(x.device) * self.annealing_coefficient
+        zeroed_y_approx = y_approx.clone() * self.annealing_coefficient
+        zeroed_y_details = [y_details[j].clone() * self.annealing_coefficient for j in range(n_detail_bands)]
 
-        self.iwt.to(x.device)
         for i in range(n_detail_bands):
             for k in range(3):
-                band_y_details = [y_details[j].clone() * self.annealing_coefficient for j in range(n_detail_bands)]
+                band_y_details = [details.clone() for details in zeroed_y_details]
                 band_y_details[i][:, :, k] = y_details[i][:, :, k]
                 outputs[:, :, i * 3 + k] = self.iwt((zeroed_y_approx, band_y_details))
                 del band_y_details
-        band_y_details = [y_details[j].clone() * self.annealing_coefficient for j in range(n_detail_bands)]
-        outputs[:, :, n_detail_bands * 3] = self.iwt((y_approx, band_y_details))
+
+        outputs[:, :, n_detail_bands * 3] = self.iwt((y_approx, zeroed_y_details))
         outputs[:, :, n_detail_bands * 3 + 1] = self.iwt((y_approx, y_details))
         outputs = outputs[:, :, :, :m, :n].reshape(b, -1, m, n)
 
