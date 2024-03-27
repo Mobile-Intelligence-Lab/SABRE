@@ -49,7 +49,11 @@ class MNISTModel(nn.Module):
         feature_count = 28 * 28
         in_features = int(math.ceil(math.sqrt(math.log(1 + feature_count)))) * 3 + 1 + 1
         self.denoise = DenoisingCNN(in_features=in_features, num_layers=3, num_features=16)
+
         self.lambda_r = torch.nn.Parameter(torch.ones(1))
+        self.mean = torch.tensor([0.1307])
+        self.stds = torch.tensor([0.3081])
+        self.normalize = False
         self.normalizers = None
 
     def set_normalizers(self, normalizers=None):
@@ -59,16 +63,14 @@ class MNISTModel(nn.Module):
         return self.denoise(x)
 
     def features_logits(self, x):
-        if self.normalizers is not None:
-            mean, std = self.normalizers
-            x = (x - mean) / std
+        if self.normalize:
+            x = (x - self.mean.to(x.device)) / self.stds.to(x.device)
 
         return self.classifier.features_logits(x)
 
     def classify(self, x):
-        if self.normalizers is not None:
-            mean, std = self.normalizers
-            x = (x - mean) / std
+        if self.normalize:
+            x = (x - self.mean.to(x.device)) / self.stds.to(x.device)
 
         return self.classifier(x)
 

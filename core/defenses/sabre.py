@@ -19,7 +19,6 @@ class Sabre(nn.Module):
 
         self.annealing_coefficient = 1e-12
         self.error_coefficient = 1e-3
-        self.use_bins = True
 
         # Placeholders for forward and inverse wavelet transform functions
         self.fwt = None
@@ -53,19 +52,24 @@ class Sabre(nn.Module):
         """Applies the transformation process including resizing, wavelet transforms, denoising, and normalization."""
         original_shape = x.shape[-2:]
         x = self.reshape_inputs(x)
-        x = self.precision_blend(x)
 
-        if self.use_rand:
-            x = self.apply_random_noise(x)
-
+        x = self.apply_random_noise(x)
         y = self.apply_wavelet_processing(x, lambda_r)
         y = self.normalize_and_reshape_output(y, original_shape)
         return y
 
-    def precision_blend(self, x, detail_ratio=.1):
-        if self.use_bins and self.eps > 0:
-            precision = -int(math.floor(math.log10(abs(self.eps)))) - 1
-            x = detail_ratio * x + (1 - detail_ratio) * torch.round(x, decimals=precision)
+    def precision_blend(self, x):
+        if self.eps > 0:
+            precision = max(min(-int(math.floor(math.log10(abs(1.25 * self.eps)))) - 1, 1), 0)
+            x = self.diff_round(x, decimals=precision)
+        return x
+
+    def diff_round(self, x, decimals=1):
+        scale_factor = (10 ** decimals)
+        x = x * scale_factor
+        diff = (1 + self.error_coefficient) * x - torch.floor(x)
+        x = x - diff + torch.where(diff >= 0.5, 1, 0)
+        x = x / scale_factor
         return x
 
     def apply_random_noise(self, x):
@@ -75,7 +79,7 @@ class Sabre(nn.Module):
 
         b, c, m, n = x.shape
         xs = x.clone().unsqueeze(2).tile(1, 1, self.n_variants, 1, 1)
-        noise = (2 * torch.rand_like(xs, device=x.device) - 1) * self.eps  # Generate noise in the range [-eps, eps]
+        noise = (2 * torch.rand_like(xs, device=x.device) - 1) * self.eps
         noise_coefficients = torch.arange(self.n_variants, device=x.device) / (self.n_variants - 1)
         noise_coefficients = noise_coefficients.unsqueeze(0).unsqueeze(1).unsqueeze(3).unsqueeze(4).tile(b, c, 1, m, n)
         noise = noise * noise_coefficients
@@ -87,6 +91,8 @@ class Sabre(nn.Module):
         batch_indices = torch.arange(b)[:, None].expand(-1, c).to(best_variant.device)
         channel_indices = torch.arange(c)[None, :].expand(b, -1).to(best_variant.device)
         x = xs_noisy[batch_indices, channel_indices, best_variant].reshape(b, c, m, n)
+
+        x = self.precision_blend(x)
 
         return x
 
@@ -119,17 +125,18 @@ class Sabre(nn.Module):
         # Denoise spectral bands
         for i, band in enumerate(bands):
             clean_band = band.reshape(b, c, -1)
-            coeffs = clean_band.abs().sort(dim=2, descending=True).values
+            coeffs = clean_band.sort(dim=2, descending=True).values
             selection_indices = (thresholds * (coeffs.shape[2] - 1)).floor().to(torch.int64).unsqueeze(-1)
             band_thresholds = torch.gather(coeffs, 2, selection_indices).expand_as(clean_band)
-            clean_band[clean_band.abs() < band_thresholds] *= self.annealing_coefficient
+            clean_band[clean_band < band_thresholds] *= self.annealing_coefficient
             bands[i] = clean_band.reshape(band.shape)
 
         # Reconstruct input
         y_approx, *y_details = bands
         n_detail_bands = len(y_details)
         y_approx = y_approx.squeeze(dim=2)
-        outputs = torch.zeros_like(x, device=x.device).unsqueeze(2).tile(1, 1, n_detail_bands * 3 + 1 + 1, 1, 1)
+        outputs = []
+        # outputs = torch.zeros_like(x, device=x.device).unsqueeze(2).tile(1, 1, n_detail_bands * 3 + 1 + 1, 1, 1)
         zeroed_y_approx = y_approx.clone() * self.annealing_coefficient
         zeroed_y_details = [y_details[j].clone() * self.annealing_coefficient for j in range(n_detail_bands)]
 
@@ -137,12 +144,17 @@ class Sabre(nn.Module):
             for k in range(3):
                 band_y_details = [details.clone() for details in zeroed_y_details]
                 band_y_details[i][:, :, k] = y_details[i][:, :, k]
-                outputs[:, :, i * 3 + k] = self.iwt((zeroed_y_approx, band_y_details))
+                outputs.append(self.iwt((zeroed_y_approx, band_y_details)))
+                # outputs[:, :, i * 3 + k] = self.iwt((zeroed_y_approx, band_y_details))
                 del band_y_details
 
-        outputs[:, :, n_detail_bands * 3] = self.iwt((y_approx, zeroed_y_details))
-        outputs[:, :, n_detail_bands * 3 + 1] = self.iwt((y_approx, y_details))
-        outputs = outputs[:, :, :, :m, :n].reshape(b, -1, m, n)
+        outputs.append(self.iwt((y_approx, zeroed_y_details)))
+        outputs.append(self.iwt((y_approx, y_details)))
+        outputs = torch.cat(outputs, dim=1)
+        outputs = outputs[:, :, :m, :n].reshape(b, -1, m, n)
+        # outputs[:, :, n_detail_bands * 3] = self.iwt((y_approx, zeroed_y_details))
+        # outputs[:, :, n_detail_bands * 3 + 1] = self.iwt((y_approx, y_details))
+        # outputs = outputs[:, :, :, :m, :n].reshape(b, -1, m, n)
 
         return outputs
 
@@ -164,12 +176,23 @@ class Sabre(nn.Module):
 
 class SabreWrapper(nn.Module):
     def __init__(self, eps: float = 8. / 255, wave='coif4', use_rand: bool = True, n_variants: int = 10,
-                 base_model: nn.Module = None):
+                 base_model: nn.Module = None, use_bpda=True):
         super(SabreWrapper, self).__init__()
         model = Sabre(eps=eps, wave=wave, use_rand=use_rand, n_variants=n_variants)
         self.core = model
         self.base_model = base_model
-        self.transform = BPDAWrapper(lambda x, lambda_r: model.transform(x, lambda_r).float())
+        self.use_bpda = use_bpda
+        self.transform_fn = lambda x, lambda_r: self.core.transform(x, lambda_r).float()
+        self.bpda_transform = BPDAWrapper(self.transform_fn)
+
+    def transform(self, x, lambda_r):
+        if self.use_bpda:
+            return self.bpda_transform(x, lambda_r)
+        return self.transform_fn(x, lambda_r)
+
+    @property
+    def normalize(self):
+        return self.base_model.normalize
 
     @property
     def lambda_r(self):

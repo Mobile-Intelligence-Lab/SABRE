@@ -265,12 +265,12 @@ def sabre_train(model, data_loader, n_epochs=100, learning_rate=1e-3, save_path=
     optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9, weight_decay=1e-4)
 
     normalize, n_channels = params.get("normalize", False), params.get("n_channels", 1)
+    n_attack_steps, n_attack_iter_steps = params.get("n_attack_steps", 1), params.get("n_attack_iter_steps", 1)
     plot_images = params.get("plot_images", False)
     eps = params.get("eps", 8. / 255) * 1.25
-    attack = EoTPGD(eps=eps, alpha=eps, steps=1, eot_steps=1, bounds=(0, 1))
 
-    if normalize:
-        set_normalizers(model, data_loader, n_channels)
+    model.base_model.normalize = normalize
+    attack = EoTPGD(eps=eps, alpha=eps, steps=n_attack_steps, eot_steps=n_attack_iter_steps, bounds=(0, 1))
 
     print_every = max(1, len(data_loader) // 10)
 
