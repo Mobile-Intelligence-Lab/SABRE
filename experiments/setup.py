@@ -4,7 +4,7 @@ import torch
 
 from core.attacks import FGSM, PGD, EoTPGD, CW
 from models.helpers import load_model
-from experiments.utils import set_normalizers, baseline_train, adversarial_train, sabre_train, evaluate
+from experiments.utils import baseline_train, adversarial_train, sabre_train, evaluate
 from utils.log import printer
 
 from pathlib import Path
@@ -102,9 +102,6 @@ def perform_attacks(model_name, model, attacks, train_fn, train_data_loader, tes
 
             printer(f'\nEvaluating model... [Attack={attack_type}/{attack_key}]', traces_file)
 
-            normalize, n_channels = train_params.get("normalize", False), train_params.get("n_channels", 1)
-            if normalize:
-                set_normalizers(model, train_data_loader, n_channels)
             correct, total = evaluate(model, attack_method, test_data_loader, log_path=traces_file)
 
             if key not in trials_records:

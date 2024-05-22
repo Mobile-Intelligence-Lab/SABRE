@@ -46,21 +46,15 @@ class MNISTModel(nn.Module):
         self.classifier = classifier
         self.features = classifier.features
 
-        feature_count = 28 * 28
-        in_features = int(math.ceil(math.sqrt(math.log(1 + feature_count)))) * 3 + 1 + 1
-        self.denoise = DenoisingCNN(in_features=in_features, num_layers=3, num_features=16)
+        self.denoise = DenoisingCNN(in_channels=1, num_layers=3, num_features=16)
 
         self.lambda_r = torch.nn.Parameter(torch.ones(1))
         self.mean = torch.tensor([0.1307])
         self.stds = torch.tensor([0.3081])
         self.normalize = False
-        self.normalizers = None
 
-    def set_normalizers(self, normalizers=None):
-        self.normalizers = normalizers
-
-    def reconstruct(self, x):
-        return self.denoise(x)
+    def reconstruct(self, x, y):
+        return self.denoise(x, y)
 
     def features_logits(self, x):
         if self.normalize:
@@ -75,5 +69,5 @@ class MNISTModel(nn.Module):
         return self.classifier(x)
 
     def forward(self, x):
-        return self.classify(self.reconstruct(x))
+        return self.classify(x)
 

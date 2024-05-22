@@ -1,7 +1,8 @@
 import math
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+
+torch.autograd.set_detect_anomaly(True)
 
 
 def reshape_inputs(x):
@@ -16,42 +17,32 @@ def reshape_inputs(x):
 
 
 class DenoisingCNN(nn.Module):
-    def __init__(self, in_features=1, out_features=1, num_layers=17, num_features=64, upsample_count=1):
+    def __init__(self, in_channels=1, out_features=1, num_layers=17, num_features=64):
         super(DenoisingCNN, self).__init__()
-        self.out_features = out_features
-        layers = [nn.Sequential(nn.Conv2d(in_features, num_features, kernel_size=3, stride=1, padding=1),
+        self.in_channels = in_channels
+        layers = [nn.Sequential(nn.Conv2d(2 * in_channels, num_features, kernel_size=3, stride=1, padding=1),
                                 nn.ReLU(inplace=True))]
         for i in range(num_layers - 2):
             layers.append(nn.Sequential(nn.Conv2d(num_features, num_features, kernel_size=3, padding=1),
-                                        nn.BatchNorm2d(num_features, momentum=0.9, eps=1e-04, affine=True),
+                                        nn.BatchNorm2d(num_features),
                                         nn.ReLU(inplace=True)))
-        layers.append(nn.Conv2d(num_features, self.out_features, kernel_size=3, padding=1))
-        layers.append(nn.Sigmoid())
+        layers.append(nn.Conv2d(num_features, in_channels, kernel_size=3, padding=1))
         self.layers = nn.Sequential(*layers)
-        self.pool = nn.AvgPool2d(2, 2)
 
-        self.upsample_count = upsample_count
-        self._initialize_weights()
-
-    def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight)
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.ones_(m.weight)
-                nn.init.zeros_(m.bias)
-
-    def forward(self, inputs):
+    def forward(self, inputs, x0):
         b, _, m, n = inputs.shape
-        c = self.out_features
-        inputs = reshape_inputs(inputs)
+        c = self.in_channels
 
-        for _ in range(self.upsample_count):
-            inputs = self.pool(inputs)
-            inputs = F.interpolate(inputs, scale_factor=2, mode='nearest')
+        inputs = reshape_inputs(inputs)
+        x0 = reshape_inputs(x0)
+
+        inputs = torch.cat((inputs, x0), dim=1)
+
+        inputs = ((inputs * (v := ((1 << 3) - 1))).round() - ((inputs < 0) & (inputs % 1 != 0)).float()) / v
 
         outputs = self.layers(inputs)
 
         if math.sqrt(m * n) > int(math.sqrt(m * n)):
             outputs = outputs.reshape(b, c, -1)[:, :, :m * n].reshape(b, c, m, n)
+
         return outputs

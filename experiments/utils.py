@@ -33,34 +33,16 @@ def adjust_learning_rate(optimizer, epoch, n_epochs, initial_lr):
     - n_epochs: The total number of epochs.
     - initial_lr: The initial learning rate.
     """
-    lr = initial_lr * (0.1 ** (epoch // (0.5 * n_epochs)))
+    lr = initial_lr * (0.1 ** (epoch // (0.5 * n_epochs))) * (0.1 ** (epoch // (0.75 * n_epochs)))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
 
-def compute_normalizers(data_loader, n_channels=1):
-    means = torch.zeros(n_channels, device=device)
-    squared_means = torch.zeros(n_channels, device=device)
-    batch_count = len(data_loader)
-
-    with torch.no_grad():
-        for (inputs, targets) in data_loader:
-            x = inputs.to(device)
-            means += x.mean(dim=(0, 2, 3))
-            squared_means += (x ** 2).mean(dim=(0, 2, 3))
-        means /= batch_count
-        stds = (squared_means / batch_count - means ** 2) ** .5
-        mean = means.reshape(-1, 1, 1).to(device)
-        stds = stds.reshape(-1, 1, 1).to(device)
-
-    return mean, stds
-
-
-def set_normalizers(model, train_data_loader, n_channels):
-    mean, std = compute_normalizers(train_data_loader, n_channels)
-    if hasattr(model, 'set_normalizers'):
-        model.set_normalizers((mean, std))
-    return mean, std
+def set_normalize(model, normalize):
+    if hasattr(model, 'normalize'):
+        model.normalize = normalize
+    elif hasattr(model.base_model, 'normalize'):
+        model.base_model.normalize = normalize
 
 
 def baseline_train(model, data_loader, n_epochs=100, learning_rate=1e-3, save_path=None, log_path=None, params={}):
@@ -82,7 +64,7 @@ def baseline_train(model, data_loader, n_epochs=100, learning_rate=1e-3, save_pa
     optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9, weight_decay=1e-4)
 
     normalize, n_channels = params.get("normalize", False), params.get("n_channels", 1)
-    mean, std = compute_normalizers(data_loader, n_channels) if normalize else (None, None)
+    set_normalize(model, normalize)
 
     for epoch in range(n_epochs):
         model.train()
@@ -95,9 +77,6 @@ def baseline_train(model, data_loader, n_epochs=100, learning_rate=1e-3, save_pa
 
         for i, (inputs, labels) in enumerate(data_loader, 0):
             inputs, labels = inputs.float().to(device), labels.to(device)
-
-            if normalize:
-                inputs = (inputs - mean) / std
 
             optimizer.zero_grad()
             outputs = model(inputs)
@@ -151,7 +130,7 @@ def adversarial_train(model, data_loader, n_epochs=100, learning_rate=1e-3, save
     normalize, n_channels = params.get("normalize", False), params.get("n_channels", 1)
     pgd_eps, pgd_alpha, pgd_steps = params.get("eps", 8. / 255), params.get("alpha", 2. / 255), params.get("steps", 7)
     attack = PGD(eps=pgd_eps, alpha=pgd_alpha, steps=pgd_steps, bounds=(0, 1))
-    mean, std = compute_normalizers(data_loader, n_channels) if normalize else (None, None)
+    set_normalize(model, normalize)
 
     for epoch in range(n_epochs):
         model.train()
@@ -164,9 +143,6 @@ def adversarial_train(model, data_loader, n_epochs=100, learning_rate=1e-3, save
 
         for i, (inputs, labels) in enumerate(data_loader, 0):
             inputs, labels = inputs.float().to(device), labels.to(device)
-
-            if normalize:
-                inputs = (inputs - mean) / std
 
             optimizer.zero_grad()
 
@@ -262,14 +238,14 @@ def sabre_train(model, data_loader, n_epochs=100, learning_rate=1e-3, save_path=
 
     criterion = nn.CrossEntropyLoss()
     reconstruction_criterion = nn.MSELoss()
-    optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9, weight_decay=1e-4)
+    optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9, weight_decay=5e-4)
 
     normalize, n_channels = params.get("normalize", False), params.get("n_channels", 1)
     n_attack_steps, n_attack_iter_steps = params.get("n_attack_steps", 1), params.get("n_attack_iter_steps", 1)
     plot_images = params.get("plot_images", False)
     eps = params.get("eps", 8. / 255) * 1.25
 
-    model.base_model.normalize = normalize
+    set_normalize(model, normalize)
     attack = EoTPGD(eps=eps, alpha=eps, steps=n_attack_steps, eot_steps=n_attack_iter_steps, bounds=(0, 1))
 
     print_every = max(1, len(data_loader) // 10)
@@ -295,17 +271,20 @@ def sabre_train(model, data_loader, n_epochs=100, learning_rate=1e-3, save_path=
             optimizer.zero_grad()
             reconstructed = model.preprocessing(inputs)
             reconstruction_targets = torch.cat((original_inputs, original_inputs), dim=0).clone().detach()
-            reconstruction_loss = 2. * torch.sqrt(reconstruction_criterion(reconstructed, reconstruction_targets))
+
+            reconstruction_loss = 1. * torch.sqrt(reconstruction_criterion(reconstructed, reconstruction_targets))
+            recon_diff = 1. * torch.sqrt(
+                reconstruction_criterion(reconstructed[:batch_size].clone().detach(), reconstructed[batch_size:]))
+            reconstruction_loss += recon_diff
+
             reconstruction_loss.backward(retain_graph=True)
 
             features, outputs = model.features_logits(reconstructed)
             targets = torch.cat((labels, labels), dim=0).clone()
             classifier_loss = criterion(outputs, targets)
 
-            classifier_loss += torch.sqrt(reconstruction_criterion(features[-1][:batch_size],
-                                                                   features[-1][batch_size:]))
-
-            classifier_loss.backward()
+            loss = classifier_loss
+            loss.backward()
             optimizer.step()
 
             # print statistics
@@ -335,6 +314,7 @@ def sabre_train(model, data_loader, n_epochs=100, learning_rate=1e-3, save_path=
                     axs[3].imshow(reconstructed[batch_size].cpu().detach().numpy().transpose((1, 2, 0)))
                     axs[3].axis('off')
                     axs[3].set_title('Reconstructed\nAdversarial')
+
                     plt.show()
 
         summarize_epoch(epoch, n_epochs, batch_count, running_losses, model, total, correct, log_path)

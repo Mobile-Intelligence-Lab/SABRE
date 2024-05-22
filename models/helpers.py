@@ -69,3 +69,11 @@ def save_model(model, save_path, log_path=None):
     torch.save(model_to_save.state_dict(), save_path)
 
     printer(f"Model saved successfully: {save_path}\n", log_path)
+
+
+class DataParallel(torch.nn.DataParallel):
+    def __getattr__(self, name):
+        try:
+            return super().__getattr__(name)
+        except AttributeError:
+            return getattr(self.module, name)

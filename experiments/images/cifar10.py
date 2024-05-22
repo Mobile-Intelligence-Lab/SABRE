@@ -8,6 +8,7 @@ sys.path.insert(0, str(root_path))
 
 from datasets.cifar10 import get_cifar10
 from models.cifar10 import Cifar10Model, resnet18
+from models.helpers import DataParallel
 from core.defenses.sabre import SabreWrapper
 from experiments.utils import ceil_dec
 from experiments.setup import setup_attacks, run_exp
@@ -21,7 +22,7 @@ def main():
                         help='The name of the model to run the experiment on.')
     parser.add_argument('--epsilon', type=float, default=8. / 255,
                         help='The perturbation limit for the adversarial attack.')
-    parser.add_argument('--batch_size', type=int, default=32,
+    parser.add_argument('--batch_size', type=int, default=512,
                         help='The batch size for training and testing.')
     parser.add_argument('--n_variants', type=int, default=10,
                         help='The number of random variants used by SABRE.')

@@ -1,4 +1,3 @@
-import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -17,6 +16,34 @@ class BasicBlock(nn.Module):
         self.bn2 = nn.BatchNorm2d(planes)
 
         self.shortcut = nn.Sequential()
+        if stride != 1 or in_planes != self.expansion*planes:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_planes, self.expansion*planes,
+                          kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(self.expansion*planes)
+            )
+
+    def forward(self, x):
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+        out += self.shortcut(x)
+        out = F.relu(out)
+        return out
+
+
+class Bottleneck(nn.Module):
+    expansion = 4
+
+    def __init__(self, in_planes, planes, stride=1):
+        super(Bottleneck, self).__init__()
+        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(planes)
+        self.conv3 = nn.Conv2d(planes, self.expansion * planes, kernel_size=1, bias=False)
+        self.bn3 = nn.BatchNorm2d(self.expansion*planes)
+
+        self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != self.expansion * planes:
             self.shortcut = nn.Sequential(
                 nn.Conv2d(in_planes, self.expansion * planes, kernel_size=1, stride=stride, bias=False),
@@ -25,7 +52,8 @@ class BasicBlock(nn.Module):
 
     def forward(self, x):
         out = F.relu(self.bn1(self.conv1(x)))
-        out = self.bn2(self.conv2(out))
+        out = F.relu(self.bn2(self.conv2(out)))
+        out = self.bn3(self.conv3(out))
         out += self.shortcut(x)
         out = F.relu(out)
         return out
@@ -44,14 +72,6 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
         self.linear = nn.Linear(512 * block.expansion, num_classes)
 
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2. / n))
-            elif isinstance(m, nn.BatchNorm2d):
-                m.weight.data.fill_(1)
-                m.bias.data.zero_()
-
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1] * (num_blocks - 1)
         layers = []
@@ -67,7 +87,6 @@ class ResNet(nn.Module):
         x_layer3 = self.layer2(x_layer2)
         x_layer4 = self.layer3(x_layer3)
         x_layer5 = F.avg_pool2d(self.layer4(x_layer4), 4)
-
         return x_layer1, x_layer2, x_layer3, x_layer4, x_layer5
 
     def features_logits(self, x: torch.Tensor):
@@ -93,32 +112,27 @@ class Cifar10Model(nn.Module):
         self.classifier = classifier
         self.features = classifier.features
 
-        feature_count = 32 * 32
-        in_features = int(math.ceil(math.sqrt(math.log(1 + feature_count)))) * 3 + 1 + 1
-        self.denoise = DenoisingCNN(in_features=in_features, num_layers=5, num_features=16)
+        self.denoise = DenoisingCNN(in_channels=3, num_layers=5)
 
-        self.lambda_r = torch.nn.Parameter(torch.ones(1))
-        self.normalizers = None
+        self.lambda_r = nn.Parameter(torch.tensor([1.]))
+        self.mean = torch.tensor([0.4914, 0.4822, 0.4465]).reshape(-1, 1, 1)
+        self.stds = torch.tensor([0.2023, 0.1994, 0.2010]).reshape(-1, 1, 1)
+        self.normalize = True
 
-    def set_normalizers(self, normalizers=None):
-        self.normalizers = normalizers
-
-    def reconstruct(self, x):
-        return self.denoise(x)
+    def reconstruct(self, x, y):
+        return self.denoise(x, y)
 
     def features_logits(self, x):
-        if self.normalizers is not None:
-            mean, std = self.normalizers
-            x = (x - mean) / std
+        if self.normalize:
+            x = (x - self.mean.to(x.device)) / self.stds.to(x.device)
 
         return self.classifier.features_logits(x)
 
     def classify(self, x):
-        if self.normalizers is not None:
-            mean, std = self.normalizers
-            x = (x - mean) / std
+        if self.normalize:
+            x = (x - self.mean.to(x.device)) / self.stds.to(x.device)
 
         return self.classifier(x)
 
     def forward(self, x):
-        return self.classify(self.reconstruct(x))
+        return self.classify(x)

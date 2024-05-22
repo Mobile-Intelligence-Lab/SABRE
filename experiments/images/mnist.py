@@ -21,7 +21,7 @@ def main():
                         help='The name of the model to run the experiment on.')
     parser.add_argument('--epsilon', type=float, default=80. / 255,
                         help='The perturbation limit for the adversarial attack.')
-    parser.add_argument('--batch_size', type=int, default=32,
+    parser.add_argument('--batch_size', type=int, default=512,
                         help='The batch size for training and testing.')
     parser.add_argument('--n_variants', type=int, default=10,
                         help='The number of random variants used by SABRE.')

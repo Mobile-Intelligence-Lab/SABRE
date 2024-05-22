@@ -1,3 +1,4 @@
+import torch
 from advertorch.attacks import CarliniWagnerL2Attack
 
 
@@ -18,4 +19,7 @@ class CW:
                                             clip_min=self.bounds[0], clip_max=self.bounds[1])
 
     def __call__(self, x, y):
-        return self.attack(x, y)
+        x_advs = self.attack(x, y)
+        x_advs = torch.max(torch.min(x_advs, x + self.eps), x - self.eps)
+        x_advs = torch.clamp(x_advs, min=self.bounds[0], max=self.bounds[1])
+        return x_advs
