@@ -235,6 +235,8 @@ def sabre_train(model, data_loader, n_epochs=100, learning_rate=1e-3, save_path=
     - params: Additional parameters for robust training.
     """
     model.to(device)
+    use_bpda = model.use_bpda
+    model.use_bpda = False
 
     criterion = nn.CrossEntropyLoss()
     reconstruction_criterion = nn.MSELoss()
@@ -261,7 +263,6 @@ def sabre_train(model, data_loader, n_epochs=100, learning_rate=1e-3, save_path=
 
         for i, (inputs, labels) in enumerate(data_loader, 0):
             inputs, labels = inputs.float().to(device), labels.to(device)
-            original_inputs = inputs.clone()
             batch_size = len(inputs)
 
             attack.set_model(model)
@@ -269,13 +270,23 @@ def sabre_train(model, data_loader, n_epochs=100, learning_rate=1e-3, save_path=
             inputs = torch.cat((inputs, adversarial_inputs.to(device)), dim=0)
 
             optimizer.zero_grad()
-            reconstructed = model.preprocessing(inputs)
-            reconstruction_targets = torch.cat((original_inputs, original_inputs), dim=0).clone().detach()
 
-            reconstruction_loss = 1. * torch.sqrt(reconstruction_criterion(reconstructed, reconstruction_targets))
-            recon_diff = 1. * torch.sqrt(
-                reconstruction_criterion(reconstructed[:batch_size].clone().detach(), reconstructed[batch_size:]))
-            reconstruction_loss += recon_diff
+            normalized_inputs = inputs.clone()
+
+            if hasattr(model.base_model, "normalize_data"):
+                normalized_inputs = model.base_model.normalize_data(normalized_inputs)
+
+            denoised, reconstructed = model.preprocessing(inputs)
+
+            reconstruction_targets = torch.cat((normalized_inputs[:batch_size], normalized_inputs[:batch_size]),
+                                               dim=0).clone().detach()
+
+            c = 1.
+            reconstruction_loss = c * torch.sqrt(reconstruction_criterion(reconstructed, reconstruction_targets))
+            reconstruction_loss += c * torch.sqrt(reconstruction_criterion(denoised[:batch_size],
+                                                                           denoised[batch_size:]))
+            reconstruction_loss += c * torch.sqrt(reconstruction_criterion(reconstructed[:batch_size].clone().detach(),
+                                                                           reconstructed[batch_size:]))
 
             reconstruction_loss.backward(retain_graph=True)
 
@@ -285,6 +296,7 @@ def sabre_train(model, data_loader, n_epochs=100, learning_rate=1e-3, save_path=
 
             loss = classifier_loss
             loss.backward()
+
             optimizer.step()
 
             # print statistics
@@ -299,11 +311,11 @@ def sabre_train(model, data_loader, n_epochs=100, learning_rate=1e-3, save_path=
 
                 if plot_images:
                     fig, axs = plt.subplots(1, 4, figsize=(8, 4))
-                    axs[0].imshow(original_inputs[0].cpu().detach().numpy().transpose((1, 2, 0)))
+                    axs[0].imshow(normalized_inputs[0].cpu().detach().numpy().transpose((1, 2, 0)))
                     axs[0].axis('off')
                     axs[0].set_title('Benign')
 
-                    axs[1].imshow(adversarial_inputs[0].cpu().detach().numpy().transpose((1, 2, 0)))
+                    axs[1].imshow(normalized_inputs[batch_size].cpu().detach().numpy().transpose((1, 2, 0)))
                     axs[1].axis('off')
                     axs[1].set_title('Adversarial')
 
@@ -324,6 +336,8 @@ def sabre_train(model, data_loader, n_epochs=100, learning_rate=1e-3, save_path=
             save_model(model, save_path, log_path)
 
     printer('Finished Training', log_path)
+
+    model.use_bpda = use_bpda
 
     # Save the trained model
     if save_path is not None:

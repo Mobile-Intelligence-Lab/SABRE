@@ -13,7 +13,7 @@ from advertorch.bpda import BPDAWrapper
 
 
 class Sabre(nn.Module):
-    def __init__(self, eps: float = 8. / 255, wave='coif4', use_rand: bool = True, n_variants: int = 10):
+    def __init__(self, eps: float = 8. / 255, wave='coif1', use_rand: bool = True, n_variants: int = 10):
         super().__init__()
 
         # Initialization of parameters and setting up the base configuration
@@ -31,9 +31,12 @@ class Sabre(nn.Module):
         self.fwt = None
         self.iwt = None
 
-    def forward(self, x, lambda_r):
+        self.lambda_r = torch.nn.Parameter(torch.ones(1))
+        self.coef = torch.nn.Parameter(torch.ones(1))
+
+    def forward(self, x):
         """Defines the forward pass of the module."""
-        return self.transform(x, lambda_r)
+        return self.transform(x)
 
     def build_transforms(self, x):
         """Initializes wavelet transforms."""
@@ -43,6 +46,8 @@ class Sabre(nn.Module):
         _, _, h, w = x.shape
         max_levels = int(math.ceil(math.sqrt(math.log(1 + h * w))))
         self.max_levels = max_levels
+
+        self.annealing_coefficient = torch.tensor(self.annealing_coefficient).to(x.device)
 
         # Initialize DWT and IDWT with the calculated max levels and specified configurations
         self.fwt = DWTForward(J=max_levels, wave=self.wave, mode=self.mode).to(x.device)
@@ -58,29 +63,14 @@ class Sabre(nn.Module):
             x = x_padded.view(b, c, target_dim, target_dim)
         return x
 
-    def transform(self, x, lambda_r):
+    def transform(self, x):
         original_shape = x.shape[-2:]
         x = self.reshape_inputs(x)
-        x = self.precision_blend(x)
 
         x = self.apply_random_noise(x)
-        y = self.apply_wavelet_processing(x, lambda_r)
+        y = self.apply_wavelet_processing(x * 255) / 255
         y = self.restore_shape(y, original_shape)
         return y
-
-    def precision_blend(self, x):
-        if self.eps > 0:
-            precision = max(min(-int(math.floor(math.log10(abs(.5 * self.eps)))) - 1, 1), 0)
-            x = self.diff_round(x, decimals=precision)
-        return x
-
-    def diff_round(self, x, decimals=1):
-        scale_factor = (10 ** decimals)
-        x = x * scale_factor
-        diff = (1 + self.error_coefficient) * x - torch.floor(x)
-        x = x - diff + torch.where(diff >= 0.5, 1, 0)
-        x = x / scale_factor
-        return x
 
     def apply_random_noise(self, x):
         """Applies random noise to the input tensor."""
@@ -104,17 +94,16 @@ class Sabre(nn.Module):
 
         return x
 
-    def estimate_threshold(self, energies, lambda_r):
+    def estimate_threshold(self, energies):
         """ Heuristic for estimating the denoising threshold based on spectral energies."""
-        threshold = (1 / self.max_levels) * torch.exp(-lambda_r * energies.mean(dim=2) /
+        threshold = (1 / self.max_levels) * torch.exp(-self.lambda_r * energies.mean(dim=2) /
                                                       (energies.std(dim=2) + self.error_coefficient))
-        threshold = torch.clamp(threshold, min=0, max=1)
         threshold = torch.nan_to_num(threshold, nan=1., posinf=1., neginf=1.)
-        if torch.isnan(lambda_r):
-            lambda_r.data = torch.ones(1, device=lambda_r.device)
+        if torch.isnan(self.lambda_r):
+            self.lambda_r.data = torch.ones(self.max_levels, device=self.lambda_r.device)
         return threshold
 
-    def apply_wavelet_processing(self, x, lambda_r):
+    def apply_wavelet_processing(self, x):
         """Applies spectral processing and reconstructs the signal."""
         b, c, m, n = x.shape
 
@@ -125,16 +114,25 @@ class Sabre(nn.Module):
         bands = [x_approx.unsqueeze(2).to(x.device)] + x_details
 
         energies = torch.cat([(band ** 2).reshape(b, c, -1).sum(dim=2, keepdim=True) for band in bands], dim=2)
-        thresholds = self.estimate_threshold(energies, lambda_r)
+        thresholds = self.estimate_threshold(energies)
+        thresholds = thresholds.unsqueeze(2).unsqueeze(3).unsqueeze(4).tile(1, 1, 3, 1, 1)
 
-        y_details = [
-            coeff *
-            (torch.where(
-                ((coeff ** 2) / (coeff ** 2).amax(dim=1, keepdim=True)) > thresholds[i + 1].mean(),
-                1.,
-                self.annealing_coefficient
-            ) + lambda_r - lambda_r.detach()) for i, coeff in enumerate(x_details)
-        ]
+        y_details = []
+        for i, coeff in enumerate(x_details):
+            band_size = coeff.shape[-1] * coeff.shape[-2]
+            band_weight = torch.sqrt(2 * torch.log(torch.tensor(band_size, dtype=torch.float32)))
+
+            _coeff = coeff.abs().view(b, c, 3, -1)
+            _coeff = torch.median(_coeff, dim=-1, keepdim=True).values.view(b, c, 3, 1, 1) / 0.6745
+            cutoff = (self.coef * thresholds + band_weight * _coeff) / 2
+
+            band_coeff = coeff.clone()
+            coeff = torch.sign(coeff) * torch.maximum(
+                coeff.abs() - cutoff,
+                coeff.abs() * self.annealing_coefficient
+            )
+            coeff[coeff.abs() > self.error_coefficient] = band_coeff[coeff.abs() > self.error_coefficient]
+            y_details.append(coeff)
 
         outputs = self.iwt((x_approx, y_details))
 
@@ -145,6 +143,11 @@ class Sabre(nn.Module):
         b, c, m, n = x.shape
         _m, _n = original_shape
 
+        min_ = x.reshape(*x.shape[:2], -1).min(dim=2)[0].unsqueeze(2).unsqueeze(3).tile(1, 1, m, n)
+        max_ = x.reshape(*x.shape[:2], -1).max(dim=2)[0].unsqueeze(2).unsqueeze(3).tile(1, 1, m, n)
+        x[max_ > min_] = (x[max_ > min_] - min_[max_ > min_]) / (max_[max_ > min_] - min_[max_ > min_])
+
+        x = torch.clamp(x, 0, 1)
         dim = math.sqrt(_m * _n)
         if dim > int(dim):
             x = x.reshape(b, c, -1)[:, :, :_m * _n].reshape(b, c, _m, _n)
@@ -153,36 +156,44 @@ class Sabre(nn.Module):
 
 
 class SabreWrapper(nn.Module):
-    def __init__(self, eps: float = 8. / 255, wave='coif4', use_rand: bool = True, n_variants: int = 10,
+    def __init__(self, eps: float = 8. / 255, wave='coif1', use_rand: bool = True, n_variants: int = 10,
                  base_model: nn.Module = None, use_bpda=True):
         super(SabreWrapper, self).__init__()
         model = Sabre(eps=eps, wave=wave, use_rand=use_rand, n_variants=n_variants)
+        base_model.set_eps(1.25 * eps)
         self.core = model
         self.base_model = base_model
         self.use_bpda = use_bpda
-        self.transform_fn = lambda x, lambda_r: model.transform(x, lambda_r)
+        self.transform_fn = model.transform
         self.transform_bpda = BPDAWrapper(self.transform_fn)
+        self.base_model.denoise.preprocessing = self.transform
 
-    def transform(self, x, lambda_r):
+    def transform(self, x):
         if self.use_bpda:
-            return self.transform_bpda(x, lambda_r)
-        return self.transform_fn(x, lambda_r)
+            return self.transform_bpda(x)
+        return self.transform_fn(x)
 
     @property
     def lambda_r(self):
-        return self.base_model.lambda_r
+        return self.core.lambda_r
 
-    def reconstruct(self, x, y):
-        return self.base_model.reconstruct(x, y)
+    def reconstruct(self, x, ctx):
+        return self.base_model.reconstruct(x, ctx)
 
     def preprocessing(self, x):
         b, c, m, n = x.shape
 
-        y = x
-        x = self.transform(x, self.lambda_r)
-        x = self.reconstruct(x, y)
+        ctx = x.clone()
 
-        return x.reshape(b, c, m, n)
+        denoised = self.transform(x)
+        if hasattr(self.base_model, "normalize_data"):
+            denoised = self.base_model.normalize_data(denoised)
+            self.base_model.denoise.normalize_data = self.base_model.normalize_data
+
+        self.base_model.denoise.classifier = self.base_model.classifier
+        x = self.reconstruct(denoised, ctx)
+
+        return denoised.reshape(b, c, m, n), x.reshape(b, c, m, n)
 
     def classify(self, x):
         return self.base_model(x)
@@ -191,7 +202,7 @@ class SabreWrapper(nn.Module):
         return self.base_model.features_logits(x)
 
     def forward(self, x):
-        return self.classify(self.preprocessing(x))
+        return self.classify(self.preprocessing(x)[1])
 
     def set_base_model(self, base_model):
         self.base_model = base_model

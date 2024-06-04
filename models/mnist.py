@@ -46,28 +46,25 @@ class MNISTModel(nn.Module):
         self.classifier = classifier
         self.features = classifier.features
 
-        self.denoise = DenoisingCNN(in_channels=1, num_layers=3, num_features=16)
-
-        self.lambda_r = torch.nn.Parameter(torch.ones(1))
         self.mean = torch.tensor([0.1307])
         self.stds = torch.tensor([0.3081])
+        self.eps = 80./255
         self.normalize = False
 
-    def reconstruct(self, x, y):
-        return self.denoise(x, y)
+        self.denoise = DenoisingCNN(in_channels=1, num_layers=3, classifier=self.classify, eps=self.eps)
+
+    def set_eps(self, eps):
+        self.eps = eps
+        self.denoise.eps = eps
+
+    def reconstruct(self, x, ctx):
+        return self.denoise(x, ctx)
 
     def features_logits(self, x):
-        if self.normalize:
-            x = (x - self.mean.to(x.device)) / self.stds.to(x.device)
-
         return self.classifier.features_logits(x)
 
     def classify(self, x):
-        if self.normalize:
-            x = (x - self.mean.to(x.device)) / self.stds.to(x.device)
-
         return self.classifier(x)
 
     def forward(self, x):
         return self.classify(x)
-

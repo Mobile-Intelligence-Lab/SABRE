@@ -16,11 +16,11 @@ class BasicBlock(nn.Module):
         self.bn2 = nn.BatchNorm2d(planes)
 
         self.shortcut = nn.Sequential()
-        if stride != 1 or in_planes != self.expansion*planes:
+        if stride != 1 or in_planes != self.expansion * planes:
             self.shortcut = nn.Sequential(
-                nn.Conv2d(in_planes, self.expansion*planes,
+                nn.Conv2d(in_planes, self.expansion * planes,
                           kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(self.expansion*planes)
+                nn.BatchNorm2d(self.expansion * planes)
             )
 
     def forward(self, x):
@@ -41,7 +41,7 @@ class Bottleneck(nn.Module):
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(planes)
         self.conv3 = nn.Conv2d(planes, self.expansion * planes, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm2d(self.expansion*planes)
+        self.bn3 = nn.BatchNorm2d(self.expansion * planes)
 
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != self.expansion * planes:
@@ -112,26 +112,30 @@ class Cifar10Model(nn.Module):
         self.classifier = classifier
         self.features = classifier.features
 
-        self.denoise = DenoisingCNN(in_channels=3, num_layers=5)
-
-        self.lambda_r = nn.Parameter(torch.tensor([1.]))
         self.mean = torch.tensor([0.4914, 0.4822, 0.4465]).reshape(-1, 1, 1)
         self.stds = torch.tensor([0.2023, 0.1994, 0.2010]).reshape(-1, 1, 1)
+        self.eps = 8. / 255
         self.normalize = True
 
-    def reconstruct(self, x, y):
-        return self.denoise(x, y)
+        self.denoise = DenoisingCNN(in_channels=3, num_layers=5, classifier=self.classify, eps=self.eps,
+                                    normalized=self.normalize)
 
-    def features_logits(self, x):
+    def set_eps(self, eps):
+        self.eps = eps
+        self.denoise.eps = eps
+
+    def normalize_data(self, x):
         if self.normalize:
             x = (x - self.mean.to(x.device)) / self.stds.to(x.device)
+        return x
 
+    def reconstruct(self, x, ctx):
+        return self.denoise(x, ctx)
+
+    def features_logits(self, x):
         return self.classifier.features_logits(x)
 
     def classify(self, x):
-        if self.normalize:
-            x = (x - self.mean.to(x.device)) / self.stds.to(x.device)
-
         return self.classifier(x)
 
     def forward(self, x):
